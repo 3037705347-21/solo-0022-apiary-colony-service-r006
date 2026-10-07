@@ -58,11 +58,12 @@ func BuildReport(snapshot store.Snapshot, apiary domain.Apiary, asOf time.Time) 
 			summary.QueenMarkColor = queen.MarkColor
 			report.LayingQueens++
 		}
-		if latest, ok := snapshot.LatestInspection(hive.ID); ok {
+		if latest, ok := snapshot.LatestInspectionView(hive.ID); ok {
 			observedAt := latest.ObservedAt
 			summary.LastInspectionAt = &observedAt
-			if len(latest.Concerns) > 0 {
-				summary.LatestConcerns = append([]string{}, latest.Concerns...)
+			// 未处理关注项按当前生效结论判断：已被随访关闭的关注项不再计入。
+			if len(latest.EffectiveConcerns) > 0 {
+				summary.LatestConcerns = append([]string{}, latest.EffectiveConcerns...)
 				report.ConcernHives = append(report.ConcernHives, hive.ID)
 			}
 		}

@@ -18,6 +18,25 @@ const (
 	TemperAggressive Temper = "aggressive"
 )
 
+// AmendmentKind 是对已固化巡检追加内容的类型。
+type AmendmentKind string
+
+const (
+	// AmendmentFollowUp 是现场几天后补充的随访结论，可关闭当时派生的关注项。
+	AmendmentFollowUp AmendmentKind = "follow_up"
+	// AmendmentCorrection 是对备注笔误的更正，不触碰任何量测。
+	AmendmentCorrection AmendmentKind = "correction"
+)
+
+// 关注项名称集合，与 inspection 分析层的派生结果保持一致，
+// 随访只能关闭这些由原始量测派生出的关注项。
+const (
+	ConcernMiteLoad    = "mite_load"
+	ConcernBroodGap    = "brood_gap"
+	ConcernTemperRisk  = "temper_risk"
+	ConcernLowStrength = "low_strength"
+)
+
 // Inspection 是一次现场巡检的固化结果，关注项由量测派生。
 type Inspection struct {
 	ID             string       `json:"id"`

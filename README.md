@@ -47,8 +47,13 @@ go run ./cmd/check -workflow read-apiary-status
 - `GET /hives/{hiveId}`：读回蜂箱。
 - `POST /hives/{hiveId}/state`：输入 `target`，返回迁移前后的状态。
 - `POST /hives/{hiveId}/inspections`：输入 `observedAt`（可选，RFC3339）、`colonyStrength`、
-  `broodPattern`、`temper`、`miteCount`、`note`，返回巡检与派生关注项。
-- `GET /hives/{hiveId}/inspections`：列出巡检。
+  `broodPattern`、`temper`、`miteCount`、`note`，返回巡检与派生关注项。巡检提交后量测即固化。
+- `GET /hives/{hiveId}/inspections`：列出巡检，每条同时给出原始记录与当前生效结论。
+- `GET /hives/{hiveId}/inspections/{inspectionId}`：读回单条巡检的原始记录与当前生效结论。
+- `POST /hives/{hiveId}/inspections/{inspectionId}/amendments`：对已有巡检追加随访或更正。
+  `kind` 取 `follow_up`（可用 `resolvedConcerns` 关闭原始派生且仍未处理的关注项）或
+  `correction`（只更正备注）；可带 `followedUpAt`、`note`、`expectedRevision`（乐观并发）
+  与 `idempotencyKey`（重复提交幂等重放）。返回修订、当前生效视图与 `created`。
 - `POST /hives/{hiveId}/queens`：输入 `origin`、`introducedAt`（可选）、`reason`，
   返回带标记色的新蜂王记录。
 - `GET /hives/{hiveId}/queens`：列出蜂王记录。
@@ -72,7 +77,12 @@ go run ./cmd/check -workflow read-apiary-status
 - 蜂王标记色由引入年份个位推导：`1/6` 白、`2/7` 黄、`3/8` 红、`4/9` 绿、`5/0` 蓝。
 - 巡检关注项阈值：螨计数 ≥ 9 记 `mite_load`，子脾为 `none` 记 `brood_gap`，
   性情为 `aggressive` 记 `temper_risk`，群势 ≤ 2 记 `low_strength`。
+- 巡检量测提交后只读；几天后的随访结论用 `follow_up` 追加（可关闭仍未处理的关注项），
+  备注笔误用 `correction` 追加，原始量测、原备注与原始关注项始终保留。
+- 巡检读取视图中的 `effectiveConcerns` 是当前仍未处理的关注项，`resolvedConcerns` 是
+  已被随访关闭的关注项，`effectiveNote` 是最后一次更正后的生效备注。
 - 待巡检：从未巡检，或距 `asOf` 超过 14 天。
+- 状态汇总中的未处理关注项按当前生效结论判断：已被随访关闭的关注项不再计入。
 
 ## 环境变量
 
@@ -86,6 +96,7 @@ go run ./cmd/check -workflow read-apiary-status
 go run ./cmd/check -workflow register-apiary
 go run ./cmd/check -workflow install-hive
 go run ./cmd/check -workflow record-inspection
+go run ./cmd/check -workflow amend-inspection
 go run ./cmd/check -workflow replace-queen
 go run ./cmd/check -workflow advance-hive-state
 go run ./cmd/check -workflow read-apiary-status

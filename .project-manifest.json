@@ -49,6 +49,16 @@
       "module_ids": ["httpapi", "inspection", "domain", "store"]
     },
     {
+      "id": "amend-inspection",
+      "name": "追加随访或更正",
+      "entry": "POST /hives/{hiveId}/inspections/{inspectionId}/amendments",
+      "steps": ["定位原始巡检", "按修订号与幂等键判定并发/重复", "校验随访或更正语义后只追加修订"],
+      "success": "返回 201 与修订及当前生效视图；幂等重放返回 200",
+      "failure": "未知对象返回未找到，乐观版本冲突或重复关闭关注项返回冲突，语义非法返回校验错误",
+      "verification": "校验入口完成随访关闭、备注更正、幂等重放与并发追加，断言原始量测保留且生效结论唯一",
+      "module_ids": ["httpapi", "inspection", "domain", "store", "status"]
+    },
+    {
       "id": "replace-queen",
       "name": "更换蜂王",
       "entry": "POST /hives/{hiveId}/queens",

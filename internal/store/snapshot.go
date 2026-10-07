@@ -8,10 +8,11 @@ import (
 
 // Snapshot 是一次一致性读取的结果，供聚合与校验使用。
 type Snapshot struct {
-	Apiaries          map[string]domain.Apiary
-	Hives             map[string]domain.Hive
-	InspectionsByHive map[string][]domain.Inspection
-	QueensByHive      map[string][]domain.Queen
+	Apiaries               map[string]domain.Apiary
+	Hives                  map[string]domain.Hive
+	InspectionsByHive      map[string][]domain.Inspection
+	AmendmentsByInspection map[string][]domain.InspectionAmendment
+	QueensByHive           map[string][]domain.Queen
 }
 
 // ApiaryHives 返回蜂场下的蜂箱，按编号升序稳定排序。
@@ -27,6 +28,7 @@ func (s Snapshot) ApiaryHives(apiaryID string) []domain.Hive {
 }
 
 // LatestInspection 返回蜂箱最近一次巡检；观察时间相同时按编号取较大者。
+// 该结果是未经追加修订投影的原始固化记录。
 func (s Snapshot) LatestInspection(hiveID string) (domain.Inspection, bool) {
 	items := s.InspectionsByHive[hiveID]
 	if len(items) == 0 {
@@ -43,6 +45,16 @@ func (s Snapshot) LatestInspection(hiveID string) (domain.Inspection, bool) {
 		}
 	}
 	return latest, true
+}
+
+// LatestInspectionView 返回蜂箱最近一次巡检的读取视图，关注项结论已是
+// 叠加随访与更正后的当前生效结论。
+func (s Snapshot) LatestInspectionView(hiveID string) (domain.InspectionView, bool) {
+	latest, ok := s.LatestInspection(hiveID)
+	if !ok {
+		return domain.InspectionView{}, false
+	}
+	return domain.ProjectInspection(latest, s.AmendmentsByInspection[latest.ID]), true
 }
 
 // LayingQueen 返回蜂箱当前处于产卵状态的蜂王。
