@@ -16,6 +16,7 @@ var workflows = map[string]func(*client) error{
 	"register-apiary":    checkRegisterApiary,
 	"install-hive":       checkHiveInstall,
 	"record-inspection":  checkRecordInspection,
+	"amend-inspection":   checkAmendInspection,
 	"replace-queen":      checkReplaceQueen,
 	"advance-hive-state": checkAdvanceHiveState,
 	"read-apiary-status": checkReadApiaryStatus,

@@ -61,8 +61,9 @@ func BuildReport(snapshot store.Snapshot, apiary domain.Apiary, asOf time.Time) 
 		if latest, ok := snapshot.LatestInspection(hive.ID); ok {
 			observedAt := latest.ObservedAt
 			summary.LastInspectionAt = &observedAt
-			if len(latest.Concerns) > 0 {
-				summary.LatestConcerns = append([]string{}, latest.Concerns...)
+			// 未处理关注项按当前生效结论判定；原始派生关注项保留在巡检记录上。
+			if len(latest.Effective.Concerns) > 0 {
+				summary.LatestConcerns = append([]string{}, latest.Effective.Concerns...)
 				report.ConcernHives = append(report.ConcernHives, hive.ID)
 			}
 		}

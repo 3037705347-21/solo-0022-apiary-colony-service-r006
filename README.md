@@ -10,7 +10,7 @@
 - `internal/domain`：实体、枚举、校验与蜂群状态迁移表。
 - `internal/store`：并发安全的内存仓储与一致性快照。
 - `internal/apiary`：蜂场与蜂箱录入、蜂箱状态迁移。
-- `internal/inspection`：巡检接收与关注项判定。
+- `internal/inspection`：巡检接收、随访与更正追加、关注项判定。
 - `internal/queen`：蜂王更换与标记色推导。
 - `internal/status`：蜂场状态汇总聚合。
 - `internal/httpapi`：路由、请求解析与响应映射。
@@ -49,6 +49,12 @@ go run ./cmd/check -workflow read-apiary-status
 - `POST /hives/{hiveId}/inspections`：输入 `observedAt`（可选，RFC3339）、`colonyStrength`、
   `broodPattern`、`temper`、`miteCount`、`note`，返回巡检与派生关注项。
 - `GET /hives/{hiveId}/inspections`：列出巡检。
+- `GET /hives/{hiveId}/inspections/{inspectionId}`：读回单条巡检，含原始记录、追加日志
+  （`amendments`）与当前生效结论（`effective`）。
+- `POST /hives/{hiveId}/inspections/{inspectionId}/amendments`：输入 `amendmentId`、`kind`
+  （`followup` 或 `correction`）以及可选的 `colonyStrength`、`broodPattern`、`temper`、
+  `miteCount`、`note`，把随访或更正追加到已有巡检。成功返回 201 与更新后的巡检；
+  同一 `amendmentId` 内容一致时幂等返回 200，内容不同返回 409。
 - `POST /hives/{hiveId}/queens`：输入 `origin`、`introducedAt`（可选）、`reason`，
   返回带标记色的新蜂王记录。
 - `GET /hives/{hiveId}/queens`：列出蜂王记录。
@@ -72,6 +78,11 @@ go run ./cmd/check -workflow read-apiary-status
 - 蜂王标记色由引入年份个位推导：`1/6` 白、`2/7` 黄、`3/8` 红、`4/9` 绿、`5/0` 蓝。
 - 巡检关注项阈值：螨计数 ≥ 9 记 `mite_load`，子脾为 `none` 记 `brood_gap`，
   性情为 `aggressive` 记 `temper_risk`，群势 ≤ 2 记 `low_strength`。
+- 巡检保存后原始量测与原始派生关注项不再改写；随访与更正以追加记录累积，
+  当前生效结论随追加更新并按同一阈值重新派生关注项。
+- 追加编号在所属巡检内唯一：内容一致的重放幂等返回，内容不同的复用返回冲突；
+  并发追加按到达顺序依次生效。
+- 状态汇总中的未处理关注项按最近一次巡检的当前生效结论判定。
 - 待巡检：从未巡检，或距 `asOf` 超过 14 天。
 
 ## 环境变量
@@ -86,6 +97,7 @@ go run ./cmd/check -workflow read-apiary-status
 go run ./cmd/check -workflow register-apiary
 go run ./cmd/check -workflow install-hive
 go run ./cmd/check -workflow record-inspection
+go run ./cmd/check -workflow amend-inspection
 go run ./cmd/check -workflow replace-queen
 go run ./cmd/check -workflow advance-hive-state
 go run ./cmd/check -workflow read-apiary-status

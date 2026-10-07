@@ -15,7 +15,8 @@
 
 - 蜂场（apiary）：编号、名称、片区、值守人、录入时间。
 - 蜂箱（hive）：编号、所属蜂场、箱型、蜂群状态、立群时间、当前蜂王编号、最近巡检时间。
-- 巡检（inspection）：所属蜂箱、观察时间、群势、子脾形态、性情、螨计数、备注与派生的关注项。
+- 巡检（inspection）：所属蜂箱、观察时间、群势、子脾形态、性情、螨计数、备注与派生的关注项；
+  原始量测保存后不再改写，事后补充以追加记录形式挂在巡检下，并维护一份当前生效结论。
 - 蜂王（queen）：编号、所属蜂箱、引入时间、来源、标记色、产卵状态。
 
 ## 业务流程
@@ -37,6 +38,16 @@
 值守人向 `POST /hives/{hiveId}/inspections` 提交群势、子脾形态、性情、螨计数与备注。
 服务确认蜂箱存在且未退役，再校验各量测范围，保存巡检记录，并按固定阈值派生关注项。
 处于已退役状态的蜂箱返回状态错误，量测越界返回校验错误。
+
+### 追加巡检随访或更正（amend-inspection）
+
+值守人向 `POST /hives/{hiveId}/inspections/{inspectionId}/amendments` 提交追加编号、类型
+（`followup` 随访 / `correction` 更正）以及要更正的量测或备注；未提交的字段保持生效结论中的
+原值。服务校验追加内容后，在同一把写锁内把追加折叠进该巡检的当前生效结论并按固定阈值重新
+派生关注项，原始量测与原始派生关注项不被改写。同一 `amendmentId` 内容一致时按幂等重放返回
+既有结论，内容不同则返回冲突；并发追加按到达顺序依次生效，不会产生相互矛盾的生效结论。
+读取巡检（`GET /hives/{hiveId}/inspections/{inspectionId}` 或列表）同时返回原始记录、
+追加日志与当前生效结论。
 
 ### 更换蜂王（replace-queen）
 
@@ -78,6 +89,9 @@
 - 性情取值 `calm`、`nervous`、`aggressive`。
 - 螨计数取值 `0..60`，表示每百只成蜂的螨数量。
 - 备注长度不超过 200 个字符。
+- 巡检保存后原始量测与原始派生关注项不再改写；随访与更正只以追加记录累积。
+- 追加类型取值 `followup`、`correction`；追加编号在所属巡检内唯一，同一编号内容一致
+  视为幂等重放，内容不同视为冲突；追加至少携带一项量测更正或备注，量测范围与巡检一致。
 
 ### 关注项派生规则
 
@@ -89,7 +103,7 @@
 ### 状态汇总规则
 
 - 待巡检：从未巡检，或距 `asOf` 超过 14 天。
-- 有未处理关注项：该蜂箱最近一次巡检派生出至少一个关注项。
+- 有未处理关注项：该蜂箱最近一次巡检的当前生效结论派生出至少一个关注项。
 - 产卵蜂王计数：该蜂场全部蜂箱中处于 `laying` 的蜂王数量。
 - `asOf` 缺省取服务当前时间；显式传入时按传入时刻计算，保证结果可复现。
 
@@ -98,7 +112,7 @@
 - `internal/domain`：实体、枚举、校验、领域错误与状态机迁移表。
 - `internal/store`：并发安全的内存仓储与一致性快照。
 - `internal/apiary`：蜂场与蜂箱录入、蜂箱状态迁移。
-- `internal/inspection`：巡检接收与关注项判定。
+- `internal/inspection`：巡检接收、随访与更正追加、关注项判定。
 - `internal/queen`：蜂王更换与标记色推导。
 - `internal/status`：蜂场状态汇总聚合。
 - `internal/httpapi`：HTTP 路由、请求解析与响应映射。
@@ -112,6 +126,8 @@
 - `POST /apiaries`、`GET /apiaries/{apiaryId}`：录入与读回蜂场。
 - `POST /apiaries/{apiaryId}/hives`、`GET /hives/{hiveId}`：安装与读回蜂箱。
 - `POST /hives/{hiveId}/inspections`、`GET /hives/{hiveId}/inspections`：提交与列出巡检。
+- `GET /hives/{hiveId}/inspections/{inspectionId}`：读回单条巡检（原始记录、追加日志与生效结论）。
+- `POST /hives/{hiveId}/inspections/{inspectionId}/amendments`：追加随访或更正。
 - `POST /hives/{hiveId}/queens`：更换蜂王。
 - `POST /hives/{hiveId}/state`：推进蜂群状态。
 - `GET /apiaries/{apiaryId}/status`：读取蜂场状态汇总。

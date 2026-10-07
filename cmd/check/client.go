@@ -73,6 +73,10 @@ func (r *response) text() string {
 	return string(r.body)
 }
 
+func (r *response) decode(target any) error {
+	return json.Unmarshal(r.body, target)
+}
+
 func (r *response) mustOrder(before, after string) error {
 	text := r.text()
 	first := strings.Index(text, before)

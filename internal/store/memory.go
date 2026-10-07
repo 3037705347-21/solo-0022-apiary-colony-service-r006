@@ -173,8 +173,52 @@ func (m *Memory) ListInspections(hiveID string) ([]domain.Inspection, error) {
 	}
 	items := m.inspections[hiveID]
 	out := make([]domain.Inspection, len(items))
-	copy(out, items)
+	for index := range items {
+		out[index] = cloneInspection(items[index])
+	}
 	return out, nil
+}
+
+func (m *Memory) GetInspection(hiveID, inspectionID string) (domain.Inspection, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.hives[hiveID]; !ok {
+		return domain.Inspection{}, domain.NotFound("蜂箱", hiveID)
+	}
+	for _, item := range m.inspections[hiveID] {
+		if item.ID == inspectionID {
+			return cloneInspection(item), nil
+		}
+	}
+	return domain.Inspection{}, domain.NotFound("巡检", inspectionID)
+}
+
+// UpdateInspection 在写锁内定位巡检、应用变更并写回，读取-修改-写入
+// 不分离，并发追加按到达顺序依次生效，不会基于过期视图互相覆盖。
+// 追加属于事后补充记录，已退役蜂箱上的历史巡检同样允许追加。
+func (m *Memory) UpdateInspection(
+	hiveID, inspectionID string,
+	mutate func(domain.Inspection) (domain.Inspection, error),
+) (domain.Inspection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.hives[hiveID]; !ok {
+		return domain.Inspection{}, domain.NotFound("蜂箱", hiveID)
+	}
+	items := m.inspections[hiveID]
+	for index, item := range items {
+		if item.ID != inspectionID {
+			continue
+		}
+		updated, err := mutate(cloneInspection(item))
+		if err != nil {
+			return domain.Inspection{}, err
+		}
+		items[index] = updated
+		m.inspections[hiveID] = items
+		return cloneInspection(updated), nil
+	}
+	return domain.Inspection{}, domain.NotFound("巡检", inspectionID)
 }
 
 func (m *Memory) ListQueens(hiveID string) ([]domain.Queen, error) {
@@ -207,9 +251,8 @@ func (m *Memory) Snapshot() Snapshot {
 	}
 	for id, items := range m.inspections {
 		copied := make([]domain.Inspection, len(items))
-		copy(copied, items)
-		for index := range copied {
-			copied[index].Concerns = append([]string{}, items[index].Concerns...)
+		for index := range items {
+			copied[index] = cloneInspection(items[index])
 		}
 		snapshot.InspectionsByHive[id] = copied
 	}
@@ -233,4 +276,41 @@ func cloneHive(hive domain.Hive) domain.Hive {
 		hive.LastInspectionAt = &observedAt
 	}
 	return hive
+}
+
+// cloneInspection 深拷贝一条巡检，包括原始关注项、生效结论与追加日志，
+// 保证快照与读回结果不会被后续追加影响。
+func cloneInspection(item domain.Inspection) domain.Inspection {
+	item.Concerns = append([]string{}, item.Concerns...)
+	item.Effective.Concerns = append([]string{}, item.Effective.Concerns...)
+	amendments := make([]domain.Amendment, len(item.Amendments))
+	for index, amendment := range item.Amendments {
+		amendments[index] = cloneAmendment(amendment)
+	}
+	item.Amendments = amendments
+	return item
+}
+
+func cloneAmendment(amendment domain.Amendment) domain.Amendment {
+	if amendment.ColonyStrength != nil {
+		value := *amendment.ColonyStrength
+		amendment.ColonyStrength = &value
+	}
+	if amendment.BroodPattern != nil {
+		value := *amendment.BroodPattern
+		amendment.BroodPattern = &value
+	}
+	if amendment.Temper != nil {
+		value := *amendment.Temper
+		amendment.Temper = &value
+	}
+	if amendment.MiteCount != nil {
+		value := *amendment.MiteCount
+		amendment.MiteCount = &value
+	}
+	if amendment.Note != nil {
+		value := *amendment.Note
+		amendment.Note = &value
+	}
+	return amendment
 }
